@@ -8,7 +8,7 @@ namespace fs = std::filesystem;
 int main(int argc, char* argv[])
 {
   auto currentPath = fs::current_path();
-  auto mainContainerName = currentPath.filename();
+  auto mainContainerName = currentPath.filename().string();
 
   /**************** Container sdk client ************************/
   /****************   Create container  ************************/
@@ -31,7 +31,7 @@ int main(int argc, char* argv[])
 
   for (auto& item : fs::directory_iterator(currentPath))
   {
-    auto fileName = item.path().filename();
+    auto fileName = item.path().filename().string();
     if (shouldSkip(item, fileName))
     {
       continue;
@@ -52,7 +52,7 @@ int main(int argc, char* argv[])
 
       /****************    Block Blob Client            **************/
       /****************        Upload                   *************/
-      blobClient.UploadFrom(item.path());
+      blobClient.UploadFrom(item.path().string());
 
       // move on to next file
       continue;

@@ -20,7 +20,11 @@ add_executable (
      src/helpers.hpp
 )
 
-add_compile_definitions(APP_NAME="storageFileSync")
+if(MSVC)
+    add_compile_definitions(APP_NAME="storageFileSync.exe")
+else()
+    add_compile_definitions(APP_NAME="storageFileSync")
+endif()
 
 target_link_libraries(storageFileSync PRIVATE azure-core azure-storage-blobs argparse::argparse)
 
