@@ -1,70 +1,79 @@
 #include "azure/storage/blobs/blob.hpp"
 
-#include <iostream>
-#include <string>
+#include "helpers.hpp"
 
 using namespace Azure::Storage::Blobs;
+namespace fs = std::filesystem;
 
-int main()
+int main(int argc, char* argv[])
 {
-    std::string containerName = "sample-container";
-    std::string blobName1 = "sample-blob-1";
-    std::string blobName2 = "sample-blob-2";
-    std::string blobContent;
-    // 50 MB
-    blobContent.resize(50 * 1024ULL * 1024, 'x');
+  auto currentPath = fs::current_path();
+  auto mainContainerName = currentPath.filename();
 
-    auto containerClient = BlobContainerClient::CreateFromConnectionString(
-        "",
-        containerName);
-    try
-    {
-        containerClient.Create();
-    }
-    catch (std::runtime_error &e)
-    {
-        // The container may already exist
-        std::cout << e.what() << std::endl;
-    }
+  /**************** Container sdk client ************************/
+  /****************   Create container  ************************/
+  auto containerClient = BlobContainerClient::CreateFromConnectionString(
+      std::getenv("STORAGE_CONNECTION_STRING"), mainContainerName);
+  try
+  {
+    containerClient.Create();
+  }
+  catch (std::runtime_error& e)
+  {
+    std::cout << e.what() << std::endl;
+  }
 
-    BlockBlobClient blobClient1 = containerClient.GetBlockBlobClient(blobName1);
-    BlockBlobClient blobClient2 = containerClient.GetBlockBlobClient(blobName2);
+  /**************** Container sdk client ************************/
+  /****************      list Blobs     ************************/
+  // 5000 max blobs supported by call. It's fine for this app
+  auto blobListResponse = containerClient.ListBlobsFlatSegment();
+  auto blobList = blobListResponse.ExtractValue();
 
+  for (auto& item : fs::directory_iterator(currentPath))
+  {
+    auto fileName = item.path().filename();
+    if (shouldSkip(item, fileName))
     {
-        // Upload with 1 thread. Default options
-        blobClient1.UploadFrom(
-            reinterpret_cast<const uint8_t *>(blobContent.data()), blobContent.size());
-    }
-    {
-        // Upload with 16 threads. Use Options
-        UploadBlockBlobFromOptions options;
-        options.Concurrency = 16;
-        blobClient2.UploadFrom(
-            reinterpret_cast<const uint8_t *>(blobContent.data()), blobContent.size(), options);
+      continue;
     }
 
-    {
-        // Download with 1 thread. Default options
-        blobClient1.DownloadTo(reinterpret_cast<uint8_t *>(&blobContent[0]), blobContent.size());
+    /****************    Block Blob Client            **************/
+    /****************  get blob from container client *************/
+    auto blobClient = containerClient.GetBlockBlobClient(fileName);
+
+    // check if file is already in storage
+    auto blob = findBlob(blobList.Items, [fileName](std::vector<BlobItem>::iterator i) {
+      return i->Name == fileName;
+    });
+
+    if (blob == blobList.Items.end())
+    { // new File. Upload
+      std::cout << std::endl << "New file: " << fileName << ". Uploading.";
+
+      /****************    Block Blob Client            **************/
+      /****************        Upload                   *************/
+      blobClient.UploadFrom(item.path());
+
+      // move on to next file
+      continue;
     }
 
-    {
-        // Download with 16 threads. Use options
-        DownloadBlobToOptions options;
-        options.Concurrency = 16;
-        blobClient2.DownloadTo(
-            reinterpret_cast<uint8_t *>(&blobContent[0]), blobContent.size(), options);
-    }
+    // Remove blob from the blob list
+    blobList.Items.erase(blob);
+  }
 
-    {
-        // list blobs. Default options
-        std::cout << "List Blobs" << std::endl;
-        auto blobList = containerClient.ListBlobsFlatSegment().ExtractValue();
-        for (auto blob : blobList.Items)
-        {
-            std::cout << "name: " << blob.Name << ". eTag: " << blob.ETag << std::endl;
-        }
-    }
+  // All blobs still in bloblist need to be download
+  for (auto blob : blobList.Items)
+  {
+    auto blobName = blob.Name;
+    std::cout << std::endl << "Downloading file: " << blobName;
 
-    return 0;
+    /****************    Block Blob Client            **************/
+    /****************        Upload                   *************/
+    BlockBlobClient blobClient = containerClient.GetBlockBlobClient(blobName);
+    blobClient.DownloadTo(blobName);
+  }
+
+  std::cout << std::endl << std::endl << "Sync completed " << std::endl;
+  return 0;
 }
