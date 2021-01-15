@@ -12,8 +12,6 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake-modules")
 
 include(GetSDK)
 
-find_package(argparse CONFIG REQUIRED)
-
 add_executable (
      storageFileSync
      src/main
@@ -26,5 +24,10 @@ else()
     add_compile_definitions(APP_NAME="storageFileSync")
 endif()
 
-target_link_libraries(storageFileSync PRIVATE azure-core azure-storage-blobs argparse::argparse)
+target_link_libraries(storageFileSync azure-storage-blobs)
+# target_include_directories(
+# storageFileSync
+#     PUBLIC
+#       ${azure-storage-blobs-cpp_INCLUDE_DIRS}
+# )
 
